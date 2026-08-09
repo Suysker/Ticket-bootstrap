@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(os.environ["MAITIX_FIXTURE_ROOT"]).resolve()
 GRANTS: dict[str, tuple[str, bytes]] = {}
+COMPLETED_GRANTS: set[str] = set()
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -37,11 +38,18 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         prefix = "/api/v1/control-hosts/enrollments/"
-        suffix = "/redeem"
-        if not self.path.startswith(prefix) or not self.path.endswith(suffix):
+        if not self.path.startswith(prefix):
             self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
             return
-        grant_id = self.path[len(prefix) : -len(suffix)]
+        remainder = self.path[len(prefix) :]
+        try:
+            grant_id, operation = remainder.rsplit("/", 1)
+        except ValueError:
+            self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
+            return
+        if operation not in {"redeem", "complete"}:
+            self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
+            return
         if grant_id not in {"ok", "truncated"}:
             self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
             return
@@ -67,6 +75,17 @@ class FixtureHandler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.UNAUTHORIZED, b"denied\n", "text/plain")
             return
         recipient = request["recipient"]
+        if operation == "complete":
+            claimed = GRANTS.get(grant_id)
+            if claimed is None or claimed[0] != recipient:
+                self._send(HTTPStatus.CONFLICT, b"not_claimed\n", "text/plain")
+                return
+            COMPLETED_GRANTS.add(grant_id)
+            self._send(HTTPStatus.NO_CONTENT, b"", "application/json")
+            return
+        if grant_id in COMPLETED_GRANTS:
+            self._send(HTTPStatus.GONE, b"completed\n", "text/plain")
+            return
         claimed = GRANTS.get(grant_id)
         if claimed is not None:
             if claimed[0] != recipient:

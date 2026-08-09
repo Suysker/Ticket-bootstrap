@@ -156,6 +156,7 @@ build_seed() {
     printf '%s\n' main > "$seed/config-branch"
     printf '%s\n' "$BACKUP_RECIPIENT" > "$seed/backup-recipient"
     printf '%s\n' none > "$seed/restore-reference"
+    cp "$ROOT/backup-identity.txt" "$seed/backup-restore-identity.txt"
     cp "$ROOT/control-release.pub" "$seed/control-release.pub"
     cp "$ROOT/worker-release.pub" "$seed/worker-release.pub"
     cp "$ROOT/control-distribution-identity.txt" \
@@ -176,6 +177,7 @@ build_seed() {
         "$seed/github-known-hosts"
     chmod 600 \
         "$seed/backup-recipient" \
+        "$seed/backup-restore-identity.txt" \
         "$seed/restore-reference" \
         "$seed/control-distribution-identity.txt" \
         "$seed/age-identity.txt" \
@@ -193,6 +195,7 @@ build_seed() {
         config-repository \
         config-branch \
         backup-recipient \
+        backup-restore-identity.txt \
         restore-reference \
         control-release.pub \
         worker-release.pub \
