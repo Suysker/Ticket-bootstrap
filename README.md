@@ -17,8 +17,8 @@ panel using its short-lived, one-time join commands.
 - A public control release is ciphertext. The installer can open it only after
   receiving an encrypted host seed from an authenticated control plane or an
   offline disaster-recovery bundle.
-- The installer does not manage DNS, TLS certificates, firewalls, Caddy,
-  Nginx, Xray, or any external gateway.
+- The installer does not manage DNS, TLS certificates, firewalls or any
+  operator-owned public gateway.
 
 ## Operator entrypoints
 
@@ -31,7 +31,7 @@ command line, URL, or environment.
 Offline root bootstrap and disaster recovery use:
 
 ```sh
-sudo ./maitix-control-install.sh --bootstrap /root/maitix-bootstrap.age
+sudo ./maitix-control-install.sh --bootstrap /root/maitix-control-seed.age
 ```
 
 Run host admission without secrets or persistent changes:

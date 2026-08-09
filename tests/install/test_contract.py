@@ -49,6 +49,33 @@ class PublicBootstrapContractTests(unittest.TestCase):
         self.assertIn("/var/tmp/maitix-control-install.*", source)
         self.assertNotIn("rm -rf /", source)
 
+    def test_verified_seed_payload_enters_the_private_install_transaction(self) -> None:
+        source = INSTALLER.read_text(encoding="utf-8")
+        extraction = source.index('tar \\\n    --extract \\\n    --gzip \\\n    --file "$SEED_PAYLOAD"')
+        handoff = source.index('--host-seed-template-file "$SEED_PAYLOAD"')
+        self.assertLess(extraction, handoff)
+        self.assertNotIn('rm -f -- "$SEED_PAYLOAD" "$SEED_CIPHERTEXT"', source)
+
+    def test_online_redemption_is_confirmed_after_seed_validation(self) -> None:
+        source = INSTALLER.read_text(encoding="utf-8")
+        validation = source.index('ssh-keygen -F github.com -f "$SEED/github-known-hosts"')
+        completion = source.index("/complete")
+        asset_download = source.index('download "$asset_url"')
+
+        self.assertLess(validation, completion)
+        self.assertLess(completion, asset_download)
+        self.assertIn('unset ENROLLMENT_CODE', source[completion:asset_download])
+
+    def test_restore_reference_selects_one_immutable_backup_asset(self) -> None:
+        source = INSTALLER.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "^backup://maitix-prod-[0-9]{8}T[0-9]{6}Z-[0-9]+"
+            "[.]tar[.]age$",
+            source,
+        )
+        self.assertNotIn("backup://latest", source)
+
     def test_release_is_draft_until_trusted_promotion(self) -> None:
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("control-bootstrap-v*", workflow)

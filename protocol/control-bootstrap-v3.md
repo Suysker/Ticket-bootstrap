@@ -57,8 +57,23 @@ Cache-Control: no-store
 
 The grant is bound to cluster, install mode, exact release, exact installer
 lock, and one ephemeral recipient. The same recipient may repeat a bounded
-network retry; another recipient, an expired/revoked grant, or a completed
-grant is rejected. The response contains no bearer token or plaintext secret.
+network retry until completion; another recipient, an expired/revoked grant,
+or a completed grant is rejected. The response contains no bearer token or
+plaintext secret.
+
+After decrypting and fully validating the host seed, the installer confirms
+the redemption with the same body:
+
+```http
+POST /api/v1/control-hosts/enrollments/{grant_id}/complete
+Content-Type: application/json
+Cache-Control: no-store
+```
+
+Completion is idempotent for the bound recipient and returns `204 No Content`.
+Only this confirmation moves the grant from `claimed` to `redeemed`, closing
+the response-loss ambiguity without making seed redemption replayable after
+completion. The enrollment code is cleared immediately after confirmation.
 
 ## Host seed
 
@@ -74,6 +89,7 @@ control-asset-url
 config-repository
 config-branch
 backup-recipient
+backup-restore-identity.txt
 restore-reference
 control-release.pub
 worker-release.pub
@@ -85,15 +101,18 @@ github-known-hosts
 
 `format` is `maitix-control-bootstrap-v3`. `install-mode` is `fresh`,
 `standby`, or `restore`. `restore-reference` is `none` except in restore mode.
+Restore mode requires the immutable form
+`backup://maitix-prod-YYYYMMDDTHHMMSSZ-PID.tar.age`; mutable aliases such as
+`latest` and path-like references are rejected.
 The control asset URL is an immutable Release asset under
 `https://github.com/Suysker/Ticket-bootstrap/releases/download/`.
 
 The seed contains only material that an empty trusted control host cannot
-derive: distribution decryption identity, SOPS age identity, read-only Git
-deploy key, pinned GitHub host keys, release verification roots, backup
-recipient, and the exact public release/config references. It does not contain
-ticket-account plaintext, Bark plaintext, database state, a GitHub PAT, or a
-release signing private key.
+derive: distribution decryption identity, SOPS age identity, backup restore
+identity and matching recipient, read-only Git deploy key, pinned GitHub host
+keys, release verification roots, and the exact public release/config
+references. It does not contain ticket-account plaintext, Bark plaintext,
+database state, a GitHub PAT, or a release signing private key.
 
 ## Encrypted control distribution
 
@@ -117,7 +136,8 @@ create a second checksum sidecar or signing format.
 ## Canonical install handoff
 
 Online and offline seed transports normalize to the same seed directory. The
-public installer then:
+online path confirms redemption only after the complete seed schema and all
+embedded keys have been validated. The public installer then:
 
 1. downloads the immutable encrypted control asset;
 2. decrypts it with the seed's distribution identity;

@@ -300,7 +300,6 @@ if [ "$MODE" = online ]; then
             --data-binary @- \
             --output "$temporary" \
             "$REDEEM_URL" || fail "control-host enrollment failed"
-    unset ENROLLMENT_CODE
     bounded_file "$temporary" 1048576 "encrypted bootstrap seed"
     mv -f -- "$temporary" "$SEED_CIPHERTEXT"
     age --decrypt \
@@ -328,6 +327,7 @@ awk '
         mode["config-repository"] = "-rw-r--r--"
         mode["config-branch"] = "-rw-r--r--"
         mode["backup-recipient"] = "-rw-------"
+        mode["backup-restore-identity.txt"] = "-rw-------"
         mode["restore-reference"] = "-rw-------"
         mode["control-release.pub"] = "-rw-r--r--"
         mode["worker-release.pub"] = "-rw-r--r--"
@@ -350,6 +350,7 @@ control-asset-url
 config-repository
 config-branch
 backup-recipient
+backup-restore-identity.txt
 restore-reference
 control-release.pub
 worker-release.pub
@@ -367,7 +368,7 @@ tar \
     --directory "$SEED" \
     --no-same-owner \
     --no-same-permissions
-rm -f -- "$SEED_PAYLOAD" "$SEED_CIPHERTEXT"
+rm -f -- "$SEED_CIPHERTEXT"
 
 [ "$(single_line "$SEED/format" "bootstrap format")" = "$PROTOCOL" ] ||
     fail "bootstrap format is unsupported"
@@ -407,15 +408,9 @@ restore_reference=$(single_line \
     "$SEED/restore-reference" "restore reference" 2048)
 if [ "$install_mode" = restore ]; then
     [ "$restore_reference" != none ] || fail "restore mode requires a backup reference"
-    case "$restore_reference" in
-        backup://[A-Za-z0-9]* ) ;;
-        *) fail "restore reference is invalid" ;;
-    esac
-    case "${restore_reference#backup://}" in
-        *[!A-Za-z0-9._/-]*|*//*|*..*|*/|/*)
-            fail "restore reference is invalid"
-            ;;
-    esac
+    printf '%s\n' "$restore_reference" |
+        grep -Eq '^backup://maitix-prod-[0-9]{8}T[0-9]{6}Z-[0-9]+[.]tar[.]age$' ||
+        fail "restore reference must select one immutable backup asset"
 else
     [ "$restore_reference" = none ] || fail "restore reference is forbidden for this mode"
 fi
@@ -424,6 +419,8 @@ bounded_file "$SEED/control-release.pub" 16384 "control release public key"
 bounded_file "$SEED/worker-release.pub" 16384 "Worker release public key"
 bounded_file "$SEED/control-distribution-identity.txt" 16384 \
     "control distribution identity"
+bounded_file "$SEED/backup-restore-identity.txt" 16384 \
+    "backup restore identity"
 bounded_file "$SEED/age-identity.txt" 16384 "configuration age identity"
 bounded_file "$SEED/github-read-key" 16384 "Git read deploy key"
 bounded_file "$SEED/github-known-hosts" 16384 "GitHub known-hosts"
@@ -433,6 +430,12 @@ openssl pkey -pubin -in "$SEED/worker-release.pub" -text -noout 2>/dev/null |
     grep -qi ed25519 || fail "Worker release public key must be Ed25519"
 age-keygen -y "$SEED/control-distribution-identity.txt" 2>/dev/null |
     grep -q '^age1[0-9a-z]*$' || fail "control distribution identity is invalid"
+backup_restore_recipient=$(
+    age-keygen -y "$SEED/backup-restore-identity.txt" 2>/dev/null
+) || fail "backup restore identity is invalid"
+[ "$backup_restore_recipient" = "$backup_recipient" ] ||
+    fail "backup restore identity differs from its recipient"
+unset backup_restore_recipient
 age-keygen -y "$SEED/age-identity.txt" 2>/dev/null |
     grep -q '^age1[0-9a-z]*$' || fail "configuration age identity is invalid"
 printf '' | age --encrypt --recipient "$backup_recipient" >/dev/null 2>&1 ||
@@ -447,6 +450,28 @@ awk '
 ' "$SEED/github-known-hosts" || fail "GitHub known-hosts is invalid"
 ssh-keygen -F github.com -f "$SEED/github-known-hosts" >/dev/null ||
     fail "GitHub host key is not discoverable"
+
+if [ "$MODE" = online ]; then
+    COMPLETE_URL=$CONTROL_ORIGIN/api/v1/control-hosts/enrollments/$GRANT_ID/complete
+    printf '{"protocol":"%s","recipient":"%s","code":"%s"}' \
+        "$PROTOCOL" "$EPHEMERAL_RECIPIENT" "$ENROLLMENT_CODE" |
+        curl \
+            --fail \
+            --silent \
+            --show-error \
+            --proto '=https' \
+            --connect-timeout 15 \
+            --max-time 120 \
+            --retry 2 \
+            --retry-all-errors \
+            --retry-delay 1 \
+            --header 'Content-Type: application/json' \
+            --header 'Cache-Control: no-store' \
+            --data-binary @- \
+            --output /dev/null \
+            "$COMPLETE_URL" || fail "control-host enrollment confirmation failed"
+    unset ENROLLMENT_CODE
+fi
 
 ENCRYPTED_DISTRIBUTION=$DOWNLOADS/control-distribution.age
 DISTRIBUTION_PAYLOAD=$WORK_ROOT/control-distribution.tar.gz
@@ -581,6 +606,8 @@ MAITIX_CONFIG_BRANCH=$config_branch \
         --worker-public-key "$SEED/worker-release.pub" \
         --worker-distribution-archive "$WORKER_ARCHIVE" \
         --age-key-file "$SEED/age-identity.txt" \
+        --host-seed-template-file "$SEED_PAYLOAD" \
         --git-read-key-file "$SEED/github-read-key" \
         --github-known-hosts-file "$SEED/github-known-hosts" \
+        --backup-restore-identity-file "$SEED/backup-restore-identity.txt" \
         --backup-recipient "$backup_recipient"
