@@ -13,7 +13,7 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
       - name: Validate shell and public contract
