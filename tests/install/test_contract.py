@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "install.sh"
 PROTOCOL = ROOT / "protocol" / "control-bootstrap-v3.md"
+README = ROOT / "README.md"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 
@@ -35,6 +36,17 @@ class PublicBootstrapContractTests(unittest.TestCase):
         self.assertNotIn("/api/v1/nodes/join-codes", combined)
         self.assertNotIn("/bootstrap/windows.ps1", combined)
         self.assertNotIn("/bootstrap/linux.sh", combined)
+
+    def test_readme_exposes_the_authorized_install_entrypoint(self) -> None:
+        readme = README.read_text(encoding="utf-8")
+
+        self.assertIn("## One-command control-plane installation", readme)
+        self.assertIn("https://ticket.suysker.xyz:18443/settings", readme)
+        self.assertIn("PINNED_BOOTSTRAP_TAG", readme)
+        self.assertIn("PINNED_INSTALLER_SHA256", readme)
+        self.assertIn("GRANT_ID_FROM_CONTROL_PANEL", readme)
+        self.assertIn("Do not replace this flow with `curl | sh`.", readme)
+        self.assertNotIn("/releases/latest/", readme)
 
     def test_enrollment_code_is_not_an_argument_or_url(self) -> None:
         source = INSTALLER.read_text(encoding="utf-8")
