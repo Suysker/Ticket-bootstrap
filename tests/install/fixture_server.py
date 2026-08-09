@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(os.environ["MAITIX_FIXTURE_ROOT"]).resolve()
 GRANTS: dict[str, tuple[str, bytes]] = {}
 COMPLETED_GRANTS: set[str] = set()
+GRANT_BY_CODE = {"OK-CODE": "ok", "TRUNCATED-CODE": "truncated"}
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -37,20 +38,12 @@ class FixtureHandler(BaseHTTPRequestHandler):
         self._send(HTTPStatus.OK, path.read_bytes(), "application/octet-stream")
 
     def do_POST(self) -> None:  # noqa: N802
-        prefix = "/api/v1/control-hosts/enrollments/"
-        if not self.path.startswith(prefix):
-            self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
-            return
-        remainder = self.path[len(prefix) :]
-        try:
-            grant_id, operation = remainder.rsplit("/", 1)
-        except ValueError:
-            self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
-            return
-        if operation not in {"redeem", "complete"}:
-            self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
-            return
-        if grant_id not in {"ok", "truncated"}:
+        operations = {
+            "/api/v1/control-hosts/enrollments/redeem": "redeem",
+            "/api/v1/control-hosts/enrollments/complete": "complete",
+        }
+        operation = operations.get(self.path)
+        if operation is None:
             self._send(HTTPStatus.NOT_FOUND, b"not_found\n", "text/plain")
             return
         try:
@@ -68,12 +61,13 @@ class FixtureHandler(BaseHTTPRequestHandler):
         if (
             set(request) != {"protocol", "recipient", "code"}
             or request["protocol"] != "maitix-control-bootstrap-v3"
-            or request["code"] != "TEST-CODE"
+            or request["code"] not in GRANT_BY_CODE
             or not isinstance(request["recipient"], str)
             or not request["recipient"].startswith("age1")
         ):
             self._send(HTTPStatus.UNAUTHORIZED, b"denied\n", "text/plain")
             return
+        grant_id = GRANT_BY_CODE[request["code"]]
         recipient = request["recipient"]
         if operation == "complete":
             claimed = GRANTS.get(grant_id)

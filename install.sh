@@ -15,8 +15,8 @@ fail() {
 
 usage() {
     printf '%s\n' \
-        "usage: maitix-control-install.sh --preflight" \
-        "       maitix-control-install.sh --origin HTTPS_ORIGIN --grant GRANT_ID" \
+        "usage: maitix-control-install.sh" \
+        "       maitix-control-install.sh --preflight" \
         "       maitix-control-install.sh --bootstrap ENCRYPTED_SEED_FILE" >&2
     exit 2
 }
@@ -60,6 +60,9 @@ single_line() {
 
 canonical_origin() {
     value=$1
+    case "$value" in
+        */) value=${value%/} ;;
+    esac
     printf '%s\n' "$value" | awk '
         /^https:\/\/[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[1-9][0-9]{0,4})?$/ {
             valid = 1
@@ -145,10 +148,12 @@ download() {
 
 MODE=
 CONTROL_ORIGIN=
-GRANT_ID=
 BOOTSTRAP_FILE=
 
 case "$#" in
+    0)
+        MODE=online
+        ;;
     1)
         [ "$1" = --preflight ] || usage
         MODE=preflight
@@ -157,14 +162,6 @@ case "$#" in
         [ "$1" = --bootstrap ] || usage
         MODE=offline
         BOOTSTRAP_FILE=$2
-        ;;
-    4)
-        if [ "$1" != --origin ] || [ "$3" != --grant ]; then
-            usage
-        fi
-        MODE=online
-        CONTROL_ORIGIN=$(canonical_origin "$2")
-        GRANT_ID=$(canonical_identifier "$4" "control-host grant ID" 128)
         ;;
     *) usage ;;
 esac
@@ -177,6 +174,12 @@ done
 [ "$(uname -m)" = x86_64 ] || fail "only amd64 hosts are supported"
 grep -qx 'ID=debian' /etc/os-release || fail "only Debian is supported"
 grep -qx 'VERSION_ID="12"' /etc/os-release || fail "only Debian 12 is supported"
+if [ "$MODE" = online ]; then
+    [ -c /dev/tty ] || fail "online enrollment requires an interactive terminal"
+    printf '%s' "Maitix control plane URL: " > /dev/tty
+    IFS= read -r CONTROL_ORIGIN < /dev/tty || fail "control plane URL was not read"
+    CONTROL_ORIGIN=$(canonical_origin "$CONTROL_ORIGIN")
+fi
 require_trusted_install_host
 [ "$(findmnt -n -o FSTYPE /run 2>/dev/null)" = tmpfs ] ||
     fail "/run must be memory-backed"
@@ -258,7 +261,6 @@ VERIFIED=$WORK_ROOT/verified
 mkdir -m 700 "$SEED" "$DOWNLOADS" "$DISTRIBUTION" "$UNTRUSTED"
 
 if [ "$MODE" = online ]; then
-    [ -c /dev/tty ] || fail "online enrollment requires an interactive terminal"
     EPHEMERAL_IDENTITY=$SECRET_ROOT/enrollment-identity.txt
     age-keygen -o "$EPHEMERAL_IDENTITY" >/dev/null 2>&1 ||
         fail "ephemeral enrollment identity generation failed"
@@ -279,7 +281,7 @@ if [ "$MODE" = online ]; then
     ENROLLMENT_CODE=$(canonical_identifier \
         "$ENROLLMENT_CODE" "control-host enrollment code" 128)
 
-    REDEEM_URL=$CONTROL_ORIGIN/api/v1/control-hosts/enrollments/$GRANT_ID/redeem
+    REDEEM_URL=$CONTROL_ORIGIN/api/v1/control-hosts/enrollments/redeem
     temporary=$SEED_CIPHERTEXT.part
     rm -f -- "$temporary"
     printf '{"protocol":"%s","recipient":"%s","code":"%s"}' \
@@ -452,7 +454,7 @@ ssh-keygen -F github.com -f "$SEED/github-known-hosts" >/dev/null ||
     fail "GitHub host key is not discoverable"
 
 if [ "$MODE" = online ]; then
-    COMPLETE_URL=$CONTROL_ORIGIN/api/v1/control-hosts/enrollments/$GRANT_ID/complete
+    COMPLETE_URL=$CONTROL_ORIGIN/api/v1/control-hosts/enrollments/complete
     printf '{"protocol":"%s","recipient":"%s","code":"%s"}' \
         "$PROTOCOL" "$EPHEMERAL_RECIPIENT" "$ENROLLMENT_CODE" |
         curl \

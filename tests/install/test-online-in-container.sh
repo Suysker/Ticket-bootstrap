@@ -220,24 +220,24 @@ for _attempt in 1 2 3 4 5 6 7 8 9 10; do
 done
 [ "$ready" -eq 1 ]
 
-printf 'TEST-CODE\n' |
+printf 'https://ticket.test/\nOK-CODE\n' |
     script -qec \
-        '/bin/sh /src/install.sh --origin https://ticket.test --grant ok' \
+        '/bin/sh /src/install.sh' \
         /dev/null >/tmp/online-success.log
 [ -f /tmp/maitix-control-installed ]
 
-if printf 'TEST-CODE\n' |
+if printf 'https://ticket.test\nOK-CODE\n' |
     script -qec \
-        '/bin/sh /src/install.sh --origin https://ticket.test --grant ok' \
+        '/bin/sh /src/install.sh' \
         /dev/null >/tmp/replay.log 2>&1; then
     printf '%s\n' 'cross-process grant replay unexpectedly succeeded' >&2
     exit 1
 fi
 grep -q 'control-host enrollment failed' /tmp/replay.log
 
-if printf 'TEST-CODE\n' |
+if printf 'https://ticket.test\nTRUNCATED-CODE\n' |
     script -qec \
-        '/bin/sh /src/install.sh --origin https://ticket.test --grant truncated' \
+        '/bin/sh /src/install.sh' \
         /dev/null >/tmp/truncated.log 2>&1; then
     printf '%s\n' 'truncated encrypted distribution unexpectedly succeeded' >&2
     exit 1

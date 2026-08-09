@@ -12,6 +12,11 @@ INSTALLER = ROOT / "install.sh"
 PROTOCOL = ROOT / "protocol" / "control-bootstrap-v3.md"
 README = ROOT / "README.md"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+INSTALL_COMMAND = (
+    "curl -fLO https://github.com/Suysker/Ticket-bootstrap/releases/download/"
+    "control-bootstrap-v3.1.0/maitix-control-install.sh "
+    "&& sudo sh ./maitix-control-install.sh"
+)
 
 
 class PublicBootstrapContractTests(unittest.TestCase):
@@ -41,12 +46,12 @@ class PublicBootstrapContractTests(unittest.TestCase):
         readme = README.read_text(encoding="utf-8")
 
         self.assertIn("## One-command control-plane installation", readme)
-        self.assertIn("--origin CONTROL_PLANE_ORIGIN_FROM_PANEL", readme)
-        self.assertIn("PINNED_BOOTSTRAP_TAG", readme)
-        self.assertIn("PINNED_INSTALLER_SHA256", readme)
-        self.assertIn("GRANT_ID_FROM_CONTROL_PANEL", readme)
-        self.assertIn("Do not replace this flow with `curl | sh`.", readme)
-        self.assertNotRegex(readme, re.compile(r"--origin https?://"))
+        self.assertIn(f"```sh\n{INSTALL_COMMAND}\n```", readme)
+        self.assertEqual(readme.count(INSTALL_COMMAND), 1)
+        self.assertIn("do not replace this", readme.casefold())
+        self.assertIn("flow with `curl | sh`", readme)
+        self.assertNotIn("--origin", readme)
+        self.assertNotIn("--grant", readme)
         self.assertNotIn("/releases/latest/", readme)
 
     def test_enrollment_code_is_not_an_argument_or_url(self) -> None:
@@ -55,6 +60,10 @@ class PublicBootstrapContractTests(unittest.TestCase):
         self.assertIn("--data-binary @-", source)
         self.assertNotRegex(source, re.compile(r"curl[^\n]*\\\$ENROLLMENT_CODE"))
         self.assertNotIn("--code", source)
+        self.assertNotIn("--origin", source)
+        self.assertNotIn("--grant", source)
+        self.assertIn('case "$#" in\n    0)', source)
+        self.assertIn("Maitix control plane URL: ", source)
 
     def test_cleanup_roots_are_allowlisted(self) -> None:
         source = INSTALLER.read_text(encoding="utf-8")
@@ -84,6 +93,8 @@ class PublicBootstrapContractTests(unittest.TestCase):
         self.assertLess(validation, completion)
         self.assertLess(completion, asset_download)
         self.assertIn('unset ENROLLMENT_CODE', source[completion:asset_download])
+        self.assertIn("/api/v1/control-hosts/enrollments/redeem", source)
+        self.assertIn("/api/v1/control-hosts/enrollments/complete", source)
 
     def test_restore_reference_selects_one_immutable_backup_asset(self) -> None:
         source = INSTALLER.read_text(encoding="utf-8")

@@ -10,29 +10,24 @@ panel using its short-lived, one-time join commands.
 
 ## One-command control-plane installation
 
-The install command is created under **Settings > Control host installation**
-in the running Maitix control panel that will authorize the target server. The
-panel injects its configured canonical public origin; this public repository
-does not assume an operator domain or port.
-
-1. Select `fresh`, `standby`, or `restore` and create a short-lived grant.
-2. Copy the one-line install command and the enrollment code separately.
-3. Run the command on the target Debian amd64 server, then enter the enrollment
-   code when the terminal prompts for it.
-
-The generated command has this form. This example is deliberately not
-executable; the panel replaces every uppercase placeholder with an immutable
-release tag, its approved digest, and this installation's grant ID:
+The normal command is always the same:
 
 ```sh
-sudo sh -c 'set -eu; umask 077; p=/var/tmp/.maitix-control-install-GRANT_ID_FROM_CONTROL_PANEL.sh; trap "rm -f -- $p" EXIT HUP INT TERM; curl --fail --silent --show-error --location https://github.com/Suysker/Ticket-bootstrap/releases/download/PINNED_BOOTSTRAP_TAG/maitix-control-install.sh -o "$p"; printf "%s  %s\n" PINNED_INSTALLER_SHA256 "$p" | sha256sum -c -; sh "$p" --origin CONTROL_PLANE_ORIGIN_FROM_PANEL --grant GRANT_ID_FROM_CONTROL_PANEL'
+curl -fLO https://github.com/Suysker/Ticket-bootstrap/releases/download/control-bootstrap-v3.1.0/maitix-control-install.sh && sudo sh ./maitix-control-install.sh
 ```
 
-There is intentionally no permanent, universally valid install command in this
-README. Each real command is bound to one audited grant and expires with it.
-The enrollment code is never put in the command line, URL, or environment, and
-the installer is downloaded completely and verified before root executes it.
-Do not replace this flow with `curl | sh`.
+1. In the control panel, select `fresh`, `standby`, or `restore`, create a
+   short-lived grant, and copy its one-time enrollment code.
+2. Run the command above on the target Debian amd64 server.
+3. Enter the authorizing control plane's HTTPS URL when prompted.
+4. Enter the one-time enrollment code when prompted; terminal echo is disabled.
+
+The command contains no operator domain, port, grant ID, enrollment code,
+private control-release selection, digest, or database setting. Installation
+mode and the exact private release are bound to the short-lived grant in the control plane. The
+same command is shown under **Settings > Control host installation**. The
+installer is downloaded completely before root executes it; do not replace this
+flow with `curl | sh`.
 
 ## Trust boundary
 

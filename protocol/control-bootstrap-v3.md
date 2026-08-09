@@ -16,15 +16,18 @@ enrollment, and mTLS Agent channel.
 The installer has exactly three operator modes:
 
 ```text
+maitix-control-install.sh
 maitix-control-install.sh --preflight
-maitix-control-install.sh --origin HTTPS_ORIGIN --grant GRANT_ID
 maitix-control-install.sh --bootstrap ENCRYPTED_SEED_FILE
 ```
 
 `--preflight` performs host admission without secrets or persistent Maitix
-state. The online mode reads the enrollment code from `/dev/tty`. The offline
-mode lets `age` read the seed passphrase from the terminal. Unknown arguments
-and mixed modes fail closed.
+state. The no-argument online mode reads the authorizing control plane's
+canonical HTTPS origin and then the enrollment code from `/dev/tty`; code echo
+is disabled. The offline mode lets `age` read the seed passphrase from the
+terminal. Unknown arguments and mixed modes fail closed. Normal installation
+never receives origin, port, grant ID, mode, release, digest, or database
+settings through argv.
 
 ## Online redemption
 
@@ -32,7 +35,7 @@ The installer creates an ephemeral age X25519 identity under root-only `/run`,
 then sends one HTTPS request:
 
 ```http
-POST /api/v1/control-hosts/enrollments/{grant_id}/redeem
+POST /api/v1/control-hosts/enrollments/redeem
 Content-Type: application/json
 Accept: application/vnd.maitix.control-seed.v3+age
 Cache-Control: no-store
@@ -44,7 +47,10 @@ Cache-Control: no-store
 }
 ```
 
-The code is transported only in the request body through curl stdin. It must
+The service computes the code's keyed HMAC digest and uses the existing unique
+digest index to lock the matching grant. The grant ID is an administrator audit
+identifier and is neither requested from the operator nor transported by the
+installer. The code is transported only in the request body through curl stdin. It must
 not appear in argv, URL, environment, files, response bodies, proxy logs, or
 application logs. A successful response is the host seed encrypted directly to
 the ephemeral recipient:
@@ -65,7 +71,7 @@ After decrypting and fully validating the host seed, the installer confirms
 the redemption with the same body:
 
 ```http
-POST /api/v1/control-hosts/enrollments/{grant_id}/complete
+POST /api/v1/control-hosts/enrollments/complete
 Content-Type: application/json
 Cache-Control: no-store
 ```
