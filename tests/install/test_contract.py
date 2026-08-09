@@ -53,7 +53,13 @@ class PublicBootstrapContractTests(unittest.TestCase):
         source = INSTALLER.read_text(encoding="utf-8")
         extraction = source.index('tar \\\n    --extract \\\n    --gzip \\\n    --file "$SEED_PAYLOAD"')
         handoff = source.index('--host-seed-template-file "$SEED_PAYLOAD"')
+        identity_handoff = source.index('--control-distribution-identity-file')
         self.assertLess(extraction, handoff)
+        self.assertLess(extraction, identity_handoff)
+        self.assertIn(
+            '"$SEED/control-distribution-identity.txt"',
+            source[identity_handoff : identity_handoff + 160],
+        )
         self.assertNotIn('rm -f -- "$SEED_PAYLOAD" "$SEED_CIPHERTEXT"', source)
 
     def test_online_redemption_is_confirmed_after_seed_validation(self) -> None:

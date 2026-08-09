@@ -607,6 +607,8 @@ MAITIX_CONFIG_BRANCH=$config_branch \
         --worker-distribution-archive "$WORKER_ARCHIVE" \
         --age-key-file "$SEED/age-identity.txt" \
         --host-seed-template-file "$SEED_PAYLOAD" \
+        --control-distribution-identity-file \
+            "$SEED/control-distribution-identity.txt" \
         --git-read-key-file "$SEED/github-read-key" \
         --github-known-hosts-file "$SEED/github-known-hosts" \
         --backup-restore-identity-file "$SEED/backup-restore-identity.txt" \

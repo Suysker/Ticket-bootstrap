@@ -145,6 +145,13 @@ embedded keys have been validated. The public installer then:
 4. invokes the verified frozen runtime's complete release verifier;
 5. invokes the verified private `deployments/control-plane/install.sh` once.
 
+The internal installer encrypts the complete seed template to the installed
+Broker identity and persists the distribution identity separately as a
+root-owned, Broker-readable host credential. Only the derived age recipient is
+public. This retained identity is the control host's capability to decrypt
+later immutable control distributions; the public installer's `/run` copy is
+still removed on exit.
+
 The internal installer remains the sole owner of native PostgreSQL, migration,
 Git configuration, Worker public distribution import, systemd, backup,
 readiness, activation, rollback, and recovery. The public installer does not
