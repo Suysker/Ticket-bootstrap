@@ -26,7 +26,9 @@ require_command() {
 }
 
 require_regular_file() {
-    [ -f "$1" ] && [ ! -L "$1" ] || fail "$2 is missing or is not a regular file"
+    if [ ! -f "$1" ] || [ -L "$1" ]; then
+        fail "$2 is missing or is not a regular file"
+    fi
 }
 
 bounded_file() {
@@ -38,8 +40,9 @@ bounded_file() {
     case "$size" in
         ''|*[!0-9]*) fail "$label size is invalid" ;;
     esac
-    [ "$size" -gt 0 ] && [ "$size" -le "$maximum" ] ||
+    if [ "$size" -le 0 ] || [ "$size" -gt "$maximum" ]; then
         fail "$label exceeds its size limit"
+    fi
 }
 
 single_line() {
@@ -88,7 +91,7 @@ control_asset_url() {
     esac
     suffix=${value#"$PUBLIC_RELEASE_PREFIX"}
     case "$suffix" in
-        ''|*//*|*'?'*|*'#'*|*'\\'*|*'@'*|*..*)
+        ''|*//*|*'?'*|*'#'*|*\\*|*'@'*|*..*)
             fail "control asset URL is not canonical"
             ;;
     esac
@@ -106,8 +109,9 @@ require_trusted_install_host() {
         esac
     done < "/proc/$$/maps"
     if [ -e /etc/ld.so.preload ] || [ -L /etc/ld.so.preload ]; then
-        [ -f /etc/ld.so.preload ] && [ ! -L /etc/ld.so.preload ] ||
+        if [ ! -f /etc/ld.so.preload ] || [ -L /etc/ld.so.preload ]; then
             fail "host preload configuration is unsafe"
+        fi
         [ ! -s /etc/ld.so.preload ] ||
             fail "host preload configuration must be empty"
     fi
@@ -155,7 +159,9 @@ case "$#" in
         BOOTSTRAP_FILE=$2
         ;;
     4)
-        [ "$1" = --origin ] && [ "$3" = --grant ] || usage
+        if [ "$1" != --origin ] || [ "$3" != --grant ]; then
+            usage
+        fi
         MODE=online
         CONTROL_ORIGIN=$(canonical_origin "$2")
         GRANT_ID=$(canonical_identifier "$4" "control-host grant ID" 128)
@@ -174,8 +180,9 @@ grep -qx 'VERSION_ID="12"' /etc/os-release || fail "only Debian 12 is supported"
 require_trusted_install_host
 [ "$(findmnt -n -o FSTYPE /run 2>/dev/null)" = tmpfs ] ||
     fail "/run must be memory-backed"
-[ -d /var/tmp ] && [ ! -L /var/tmp ] ||
+if [ ! -d /var/tmp ] || [ -L /var/tmp ]; then
     fail "/var/tmp must be a real directory"
+fi
 available_kb=$(df -Pk /var/tmp | awk 'NR == 2 { print $4 }')
 case "$available_kb" in
     ''|*[!0-9]*) fail "available bootstrap disk space is invalid" ;;
@@ -381,13 +388,13 @@ case "$config_repository" in
     *) fail "configuration repository is invalid" ;;
 esac
 case "${config_repository#git@github.com:}" in
-    *[!A-Za-z0-9_.\/-]*|*//*|/*|*/.git|.git)
+    *[!A-Za-z0-9_./-]*|*//*|/*|*/.git|.git)
         fail "configuration repository is invalid"
         ;;
 esac
 config_branch=$(single_line "$SEED/config-branch" "configuration branch")
 case "$config_branch" in
-    *[!A-Za-z0-9._\/-]*|*//*|*..*|*/|.*|-*)
+    *[!A-Za-z0-9._/-]*|*//*|*..*|*/|.*|-*)
         fail "configuration branch is invalid"
         ;;
 esac
@@ -405,7 +412,7 @@ if [ "$install_mode" = restore ]; then
         *) fail "restore reference is invalid" ;;
     esac
     case "${restore_reference#backup://}" in
-        *[!A-Za-z0-9._\/-]*|*//*|*..*|*/|/*)
+        *[!A-Za-z0-9._/-]*|*//*|*..*|*/|/*)
             fail "restore reference is invalid"
             ;;
     esac
@@ -524,11 +531,13 @@ expected_archive_size=$(printf '%s\n' "$archive_claims" | awk '{ print $2 }')
 case "$expected_archive_size" in
     ''|*[!0-9]*) fail "control release archive size is invalid" ;;
 esac
-[ "$expected_archive_size" -gt 0 ] && [ "$expected_archive_size" -le 536870912 ] ||
+if [ "$expected_archive_size" -le 0 ] || [ "$expected_archive_size" -gt 536870912 ]; then
     fail "control release archive size is outside policy"
-[ "$(wc -c < "$ARCHIVE" | awk '{ print $1 }')" -eq "$expected_archive_size" ] &&
-    [ "$(sha256sum "$ARCHIVE" | awk '{ print $1 }')" = "$expected_archive_sha256" ] ||
+fi
+if [ "$(wc -c < "$ARCHIVE" | awk '{ print $1 }')" -ne "$expected_archive_size" ] ||
+    [ "$(sha256sum "$ARCHIVE" | awk '{ print $1 }')" != "$expected_archive_sha256" ]; then
     fail "control release archive differs from its signed manifest"
+fi
 
 tar --list --gzip --file "$ARCHIVE" > "$WORK_ROOT/release-members"
 awk '
