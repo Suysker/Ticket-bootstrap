@@ -11,9 +11,9 @@ panel using its short-lived, one-time join commands.
 ## One-command control-plane installation
 
 The install command is created under **Settings > Control host installation**
-in an already-running Maitix control panel:
-
-**[Create a control-host install command](https://ticket.suysker.xyz:18443/settings)**
+in the running Maitix control panel that will authorize the target server. The
+panel injects its configured canonical public origin; this public repository
+does not assume an operator domain or port.
 
 1. Select `fresh`, `standby`, or `restore` and create a short-lived grant.
 2. Copy the one-line install command and the enrollment code separately.
@@ -25,7 +25,7 @@ executable; the panel replaces every uppercase placeholder with an immutable
 release tag, its approved digest, and this installation's grant ID:
 
 ```sh
-sudo sh -c 'set -eu; umask 077; p=/var/tmp/.maitix-control-install-GRANT_ID_FROM_CONTROL_PANEL.sh; trap "rm -f -- $p" EXIT HUP INT TERM; curl --fail --silent --show-error --location https://github.com/Suysker/Ticket-bootstrap/releases/download/PINNED_BOOTSTRAP_TAG/maitix-control-install.sh -o "$p"; printf "%s  %s\n" PINNED_INSTALLER_SHA256 "$p" | sha256sum -c -; sh "$p" --origin https://ticket.suysker.xyz:18443 --grant GRANT_ID_FROM_CONTROL_PANEL'
+sudo sh -c 'set -eu; umask 077; p=/var/tmp/.maitix-control-install-GRANT_ID_FROM_CONTROL_PANEL.sh; trap "rm -f -- $p" EXIT HUP INT TERM; curl --fail --silent --show-error --location https://github.com/Suysker/Ticket-bootstrap/releases/download/PINNED_BOOTSTRAP_TAG/maitix-control-install.sh -o "$p"; printf "%s  %s\n" PINNED_INSTALLER_SHA256 "$p" | sha256sum -c -; sh "$p" --origin CONTROL_PLANE_ORIGIN_FROM_PANEL --grant GRANT_ID_FROM_CONTROL_PANEL'
 ```
 
 There is intentionally no permanent, universally valid install command in this

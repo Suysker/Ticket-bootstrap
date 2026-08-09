@@ -41,11 +41,12 @@ class PublicBootstrapContractTests(unittest.TestCase):
         readme = README.read_text(encoding="utf-8")
 
         self.assertIn("## One-command control-plane installation", readme)
-        self.assertIn("https://ticket.suysker.xyz:18443/settings", readme)
+        self.assertIn("--origin CONTROL_PLANE_ORIGIN_FROM_PANEL", readme)
         self.assertIn("PINNED_BOOTSTRAP_TAG", readme)
         self.assertIn("PINNED_INSTALLER_SHA256", readme)
         self.assertIn("GRANT_ID_FROM_CONTROL_PANEL", readme)
         self.assertIn("Do not replace this flow with `curl | sh`.", readme)
+        self.assertNotRegex(readme, re.compile(r"--origin https?://"))
         self.assertNotIn("/releases/latest/", readme)
 
     def test_enrollment_code_is_not_an_argument_or_url(self) -> None:
