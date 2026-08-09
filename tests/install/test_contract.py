@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "install.sh"
 PROTOCOL = ROOT / "protocol" / "control-bootstrap-v3.md"
+RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 
 class PublicBootstrapContractTests(unittest.TestCase):
@@ -47,6 +48,14 @@ class PublicBootstrapContractTests(unittest.TestCase):
         self.assertIn("/run/maitix-control-seed.*", source)
         self.assertIn("/var/tmp/maitix-control-install.*", source)
         self.assertNotIn("rm -rf /", source)
+
+    def test_release_is_draft_until_trusted_promotion(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("control-bootstrap-v*", workflow)
+        self.assertIn("dist/maitix-control-install.sh", workflow)
+        self.assertIn("--draft", workflow)
+        self.assertNotIn("gh release download latest", workflow.lower())
+        self.assertNotIn("/releases/latest/", workflow.lower())
 
     def test_no_public_secret_or_private_core_fixture(self) -> None:
         forbidden_suffixes = {".age", ".key", ".pem", ".p12", ".pfx"}

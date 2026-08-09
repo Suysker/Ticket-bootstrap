@@ -1,0 +1,36 @@
+name: bootstrap-release
+
+on:
+  push:
+    tags:
+      - control-bootstrap-v*
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    uses: ./.github/workflows/ci.yml
+
+  draft-release:
+    needs: contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare immutable public assets
+        run: |
+          install -D -m 0755 install.sh dist/maitix-control-install.sh
+          install -D -m 0644 protocol/control-bootstrap-v3.md dist/control-bootstrap-v3.md
+      - name: Create draft release for trusted promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            'dist/maitix-control-install.sh#Maitix control-plane installer' \
+            'dist/control-bootstrap-v3.md#Control Bootstrap v3 protocol' \
+            --draft \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME" \
+            --verify-tag
