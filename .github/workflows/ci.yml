@@ -23,3 +23,5 @@ jobs:
           python3 -m unittest discover -s tests/install -p 'test_*.py'
       - name: Validate Debian host admission
         run: tests/install/test-preflight.sh
+      - name: Validate online enrollment and cleanup
+        run: tests/install/test-online.sh
