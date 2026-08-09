@@ -1,0 +1,25 @@
+name: bootstrap-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+      - name: Validate shell and public contract
+        run: |
+          sh -n install.sh
+          shellcheck -s sh install.sh
+          python3 -m unittest discover -s tests/install -p 'test_*.py'
+      - name: Validate Debian host admission
+        run: tests/install/test-preflight.sh
