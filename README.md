@@ -5,7 +5,7 @@ Maitix **control-plane server**. It publishes a versioned installer and carries
 only opaque, age-encrypted control-plane release assets.
 
 This repository does not install Worker clients. After a control plane is
-running, a Super Admin enrolls Windows and Linux Workers from the `/nodes`
+running, a Super Admin enrolls Windows, Linux, and macOS Workers from the `/nodes`
 panel using its short-lived, one-time join commands.
 
 ## One-command control-plane installation
