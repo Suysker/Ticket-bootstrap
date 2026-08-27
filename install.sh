@@ -5,7 +5,7 @@ set -eu
 umask 077
 export LC_ALL=C
 
-PROTOCOL=maitix-control-bootstrap-v3
+PROTOCOL=maitix-control-bootstrap-v4
 PUBLIC_RELEASE_PREFIX=https://github.com/Suysker/Ticket-bootstrap/releases/download/
 
 fail() {
@@ -297,7 +297,7 @@ if [ "$MODE" = online ]; then
             --retry-all-errors \
             --retry-delay 1 \
             --header 'Content-Type: application/json' \
-            --header 'Accept: application/vnd.maitix.control-seed.v3+age' \
+            --header 'Accept: application/vnd.maitix.control-seed.v4+age' \
             --header 'Cache-Control: no-store' \
             --data-binary @- \
             --output "$temporary" \
@@ -323,7 +323,8 @@ awk '
         valid = 1
         mode["format"] = "-rw-r--r--"
         mode["cluster-id"] = "-rw-r--r--"
-        mode["install-mode"] = "-rw-r--r--"
+        mode["state-source"] = "-rw-r--r--"
+        mode["activation-mode"] = "-rw-r--r--"
         mode["release-id"] = "-rw-r--r--"
         mode["control-asset-url"] = "-rw-r--r--"
         mode["config-repository"] = "-rw-r--r--"
@@ -346,7 +347,8 @@ awk '
 cat > "$SECRET_ROOT/expected-seed-members" <<'EOF'
 format
 cluster-id
-install-mode
+state-source
+activation-mode
 release-id
 control-asset-url
 config-repository
@@ -376,10 +378,15 @@ rm -f -- "$SEED_CIPHERTEXT"
     fail "bootstrap format is unsupported"
 cluster_id=$(canonical_identifier \
     "$(single_line "$SEED/cluster-id" "cluster ID" 128)" "cluster ID" 128)
-install_mode=$(single_line "$SEED/install-mode" "install mode" 32)
-case "$install_mode" in
-    fresh|standby|restore) ;;
-    *) fail "install mode is unsupported" ;;
+state_source=$(single_line "$SEED/state-source" "state source" 32)
+case "$state_source" in
+    fresh|backup) ;;
+    *) fail "state source is unsupported" ;;
+esac
+activation_mode=$(single_line "$SEED/activation-mode" "activation mode" 32)
+case "$state_source:$activation_mode" in
+    fresh:active|backup:active|backup:standby) ;;
+    *) fail "control-host mode is unsupported" ;;
 esac
 release_id=$(canonical_identifier \
     "$(single_line "$SEED/release-id" "release ID" 128)" "release ID" 128)
@@ -408,13 +415,13 @@ case "$backup_recipient" in
 esac
 restore_reference=$(single_line \
     "$SEED/restore-reference" "restore reference" 2048)
-if [ "$install_mode" = restore ]; then
-    [ "$restore_reference" != none ] || fail "restore mode requires a backup reference"
+if [ "$state_source" = backup ]; then
+    [ "$restore_reference" != none ] || fail "backup state source requires a backup reference"
     printf '%s\n' "$restore_reference" |
         grep -Eq '^backup://maitix-prod-[0-9]{8}T[0-9]{6}Z-[0-9]+[.]tar[.]age$' ||
         fail "restore reference must select one immutable backup asset"
 else
-    [ "$restore_reference" = none ] || fail "restore reference is forbidden for this mode"
+    [ "$restore_reference" = none ] || fail "restore reference is forbidden for a fresh state source"
 fi
 
 bounded_file "$SEED/control-release.pub" 16384 "control release public key"
@@ -452,28 +459,6 @@ awk '
 ' "$SEED/github-known-hosts" || fail "GitHub known-hosts is invalid"
 ssh-keygen -F github.com -f "$SEED/github-known-hosts" >/dev/null ||
     fail "GitHub host key is not discoverable"
-
-if [ "$MODE" = online ]; then
-    COMPLETE_URL=$CONTROL_ORIGIN/api/v1/control-hosts/enrollments/complete
-    printf '{"protocol":"%s","recipient":"%s","code":"%s"}' \
-        "$PROTOCOL" "$EPHEMERAL_RECIPIENT" "$ENROLLMENT_CODE" |
-        curl \
-            --fail \
-            --silent \
-            --show-error \
-            --proto '=https' \
-            --connect-timeout 15 \
-            --max-time 120 \
-            --retry 2 \
-            --retry-all-errors \
-            --retry-delay 1 \
-            --header 'Content-Type: application/json' \
-            --header 'Cache-Control: no-store' \
-            --data-binary @- \
-            --output /dev/null \
-            "$COMPLETE_URL" || fail "control-host enrollment confirmation failed"
-    unset ENROLLMENT_CODE
-fi
 
 ENCRYPTED_DISTRIBUTION=$DOWNLOADS/control-distribution.age
 DISTRIBUTION_PAYLOAD=$WORK_ROOT/control-distribution.tar.gz
@@ -596,7 +581,8 @@ rm -rf -- "$UNTRUSTED"
 
 MAITIX_VERIFIED_RELEASE_ROOT=$VERIFIED \
 MAITIX_CLUSTER_ID=$cluster_id \
-MAITIX_CONTROL_INSTALL_MODE=$install_mode \
+MAITIX_CONTROL_STATE_SOURCE=$state_source \
+MAITIX_CONTROL_ACTIVATION_MODE=$activation_mode \
 MAITIX_CONTROL_RESTORE_REFERENCE=$restore_reference \
 MAITIX_CONFIG_REPOSITORY=$config_repository \
 MAITIX_CONFIG_BRANCH=$config_branch \
@@ -615,3 +601,33 @@ MAITIX_CONFIG_BRANCH=$config_branch \
         --github-known-hosts-file "$SEED/github-known-hosts" \
         --backup-restore-identity-file "$SEED/backup-restore-identity.txt" \
         --backup-recipient "$backup_recipient"
+
+if [ "$MODE" = online ]; then
+    COMPLETE_URL=$CONTROL_ORIGIN/api/v1/control-hosts/enrollments/complete
+    printf '{"protocol":"%s","recipient":"%s","code":"%s"}' \
+        "$PROTOCOL" "$EPHEMERAL_RECIPIENT" "$ENROLLMENT_CODE" |
+        curl \
+            --fail \
+            --silent \
+            --show-error \
+            --proto '=https' \
+            --connect-timeout 15 \
+            --max-time 120 \
+            --retry 2 \
+            --retry-all-errors \
+            --retry-delay 1 \
+            --header 'Content-Type: application/json' \
+            --header 'Cache-Control: no-store' \
+            --data-binary @- \
+            --output /dev/null \
+            "$COMPLETE_URL" || fail "control-host enrollment confirmation failed"
+    unset ENROLLMENT_CODE
+fi
+
+if [ "$activation_mode" = standby ]; then
+    printf '%s\n' \
+        "status=installed-standby" \
+        "activate_command=sudo /bin/sh /opt/maitix/current/deployments/control-plane/activate-control-host.sh"
+else
+    printf '%s\n' "status=installed-active"
+fi

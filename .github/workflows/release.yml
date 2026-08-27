@@ -22,14 +22,14 @@ jobs:
       - name: Prepare immutable public assets
         run: |
           install -D -m 0755 install.sh dist/maitix-control-install.sh
-          install -D -m 0644 protocol/control-bootstrap-v3.md dist/control-bootstrap-v3.md
+          install -D -m 0644 protocol/control-bootstrap-v4.md dist/control-bootstrap-v4.md
       - name: Create draft release for trusted promotion
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             'dist/maitix-control-install.sh#Maitix control-plane installer' \
-            'dist/control-bootstrap-v3.md#Control Bootstrap v3 protocol' \
+            'dist/control-bootstrap-v4.md#Control Bootstrap v4 protocol' \
             --draft \
             --generate-notes \
             --title "$GITHUB_REF_NAME" \

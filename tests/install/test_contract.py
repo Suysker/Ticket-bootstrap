@@ -9,12 +9,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "install.sh"
-PROTOCOL = ROOT / "protocol" / "control-bootstrap-v3.md"
+PROTOCOL = ROOT / "protocol" / "control-bootstrap-v4.md"
 README = ROOT / "README.md"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 INSTALL_COMMAND = (
     "curl -fLO https://github.com/Suysker/Ticket-bootstrap/releases/download/"
-    "control-bootstrap-v3.1.0/maitix-control-install.sh "
+    "control-bootstrap-v4.0.0/maitix-control-install.sh "
     "&& sudo sh ./maitix-control-install.sh"
 )
 
@@ -36,7 +36,7 @@ class PublicBootstrapContractTests(unittest.TestCase):
         combined = INSTALLER.read_text(encoding="utf-8") + PROTOCOL.read_text(
             encoding="utf-8"
         )
-        self.assertIn("maitix-control-bootstrap-v3", combined)
+        self.assertIn("maitix-control-bootstrap-v4", combined)
         self.assertIn("Suysker/Ticket-bootstrap", combined)
         self.assertNotIn("/api/v1/nodes/join-codes", combined)
         self.assertNotIn("/bootstrap/windows.ps1", combined)
@@ -84,17 +84,23 @@ class PublicBootstrapContractTests(unittest.TestCase):
         )
         self.assertNotIn('rm -f -- "$SEED_PAYLOAD" "$SEED_CIPHERTEXT"', source)
 
-    def test_online_redemption_is_confirmed_after_seed_validation(self) -> None:
+    def test_online_redemption_is_confirmed_only_after_verified_install(self) -> None:
         source = INSTALLER.read_text(encoding="utf-8")
         validation = source.index('ssh-keygen -F github.com -f "$SEED/github-known-hosts"')
+        install = source.index('"$VERIFIED/deployments/control-plane/install.sh"')
         completion = source.index("/complete")
-        asset_download = source.index('download "$asset_url"')
 
         self.assertLess(validation, completion)
-        self.assertLess(completion, asset_download)
-        self.assertIn('unset ENROLLMENT_CODE', source[completion:asset_download])
+        self.assertLess(install, completion)
+        self.assertIn('unset ENROLLMENT_CODE', source[completion:])
         self.assertIn("/api/v1/control-hosts/enrollments/redeem", source)
         self.assertIn("/api/v1/control-hosts/enrollments/complete", source)
+        activation_output = source.index("status=installed-standby")
+        self.assertLess(completion, activation_output)
+        self.assertIn(
+            "sudo /bin/sh /opt/maitix/current/deployments/control-plane/activate-control-host.sh",
+            source,
+        )
 
     def test_restore_reference_selects_one_immutable_backup_asset(self) -> None:
         source = INSTALLER.read_text(encoding="utf-8")

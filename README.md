@@ -13,21 +13,26 @@ panel using its short-lived, one-time join commands.
 The normal command is always the same:
 
 ```sh
-curl -fLO https://github.com/Suysker/Ticket-bootstrap/releases/download/control-bootstrap-v3.1.0/maitix-control-install.sh && sudo sh ./maitix-control-install.sh
+curl -fLO https://github.com/Suysker/Ticket-bootstrap/releases/download/control-bootstrap-v4.0.0/maitix-control-install.sh && sudo sh ./maitix-control-install.sh
 ```
 
-1. In the control panel, select `fresh`, `standby`, or `restore`, create a
-   short-lived grant, and copy its one-time enrollment code.
+1. In the control panel, create the required fresh-host or migration grant and
+   copy its one-time enrollment code.
 2. Run the command above on the target Debian amd64 server.
 3. Enter the authorizing control plane's HTTPS URL when prompted.
 4. Enter the one-time enrollment code when prompted; terminal echo is disabled.
 
 The command contains no operator domain, port, grant ID, enrollment code,
-private control-release selection, digest, or database setting. Installation
-mode and the exact private release are bound to the short-lived grant in the control plane. The
+private control-release selection, digest, or database setting. State source,
+activation mode and the exact private release are bound to the short-lived grant. The
 same command is shown under **Settings > Control host installation**. The
 installer is downloaded completely before root executes it; do not replace this
 flow with `curl | sh`.
+
+Migration grants install the new host in standby. After the full install and
+grant acknowledgement succeed, the installer prints one fixed
+`activate_command=...`. Run that command on the new host and switch your
+external ingress only after it returns `status=ready-for-ingress-switch`.
 
 ## Trust boundary
 
@@ -56,7 +61,7 @@ sudo ./maitix-control-install.sh --preflight
 ```
 
 The current protocol is documented in
-[`protocol/control-bootstrap-v3.md`](protocol/control-bootstrap-v3.md).
+[`protocol/control-bootstrap-v4.md`](protocol/control-bootstrap-v4.md).
 
 ## Development
 

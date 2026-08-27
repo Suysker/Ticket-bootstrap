@@ -87,9 +87,18 @@ cat > "$RELEASE/deployments/control-plane/install.sh" <<'EOF'
 set -eu
 
 [ "${MAITIX_CLUSTER_ID:-}" = maitix-prod ]
-[ "${MAITIX_CONTROL_INSTALL_MODE:-}" = fresh ]
-[ "${MAITIX_CONTROL_RESTORE_REFERENCE:-}" = none ]
-touch /tmp/maitix-control-installed
+case "${MAITIX_CONTROL_STATE_SOURCE:-}:${MAITIX_CONTROL_ACTIVATION_MODE:-}" in
+    fresh:active)
+        [ "${MAITIX_CONTROL_RESTORE_REFERENCE:-}" = none ]
+        touch /tmp/maitix-control-installed-active
+        ;;
+    backup:standby)
+        [ "${MAITIX_CONTROL_RESTORE_REFERENCE:-}" = \
+            backup://maitix-prod-20260828T030000Z-42.tar.age ]
+        touch /tmp/maitix-control-installed-standby
+        ;;
+    *) exit 3 ;;
+esac
 EOF
 chmod 755 \
     "$RELEASE/runtime/maitix-control" \
@@ -143,11 +152,15 @@ printf '%s' truncated > "$ROOT/truncated.age"
 build_seed() {
     grant=$1
     asset=$2
+    state_source=$3
+    activation_mode=$4
+    restore_reference=$5
     seed=$ROOT/seed-$grant
     mkdir "$seed"
-    printf '%s\n' maitix-control-bootstrap-v3 > "$seed/format"
+    printf '%s\n' maitix-control-bootstrap-v4 > "$seed/format"
     printf '%s\n' maitix-prod > "$seed/cluster-id"
-    printf '%s\n' fresh > "$seed/install-mode"
+    printf '%s\n' "$state_source" > "$seed/state-source"
+    printf '%s\n' "$activation_mode" > "$seed/activation-mode"
     printf '%s\n' test-release > "$seed/release-id"
     printf '%s\n' \
         "https://github.com/Suysker/Ticket-bootstrap/releases/download/control-test/$asset" \
@@ -155,7 +168,7 @@ build_seed() {
     printf '%s\n' git@github.com:Suysker/Ticket.git > "$seed/config-repository"
     printf '%s\n' main > "$seed/config-branch"
     printf '%s\n' "$BACKUP_RECIPIENT" > "$seed/backup-recipient"
-    printf '%s\n' none > "$seed/restore-reference"
+    printf '%s\n' "$restore_reference" > "$seed/restore-reference"
     cp "$ROOT/backup-identity.txt" "$seed/backup-restore-identity.txt"
     cp "$ROOT/control-release.pub" "$seed/control-release.pub"
     cp "$ROOT/worker-release.pub" "$seed/worker-release.pub"
@@ -167,7 +180,8 @@ build_seed() {
     chmod 644 \
         "$seed/format" \
         "$seed/cluster-id" \
-        "$seed/install-mode" \
+        "$seed/state-source" \
+        "$seed/activation-mode" \
         "$seed/release-id" \
         "$seed/control-asset-url" \
         "$seed/config-repository" \
@@ -189,7 +203,8 @@ build_seed() {
         --directory "$seed" \
         format \
         cluster-id \
-        install-mode \
+        state-source \
+        activation-mode \
         release-id \
         control-asset-url \
         config-repository \
@@ -205,8 +220,10 @@ build_seed() {
         github-known-hosts
 }
 
-build_seed ok control.age
-build_seed truncated truncated.age
+build_seed ok control.age fresh active none
+build_seed standby control.age backup standby \
+    backup://maitix-prod-20260828T030000Z-42.tar.age
+build_seed truncated truncated.age fresh active none
 
 MAITIX_FIXTURE_ROOT=$ROOT python3 /src/tests/install/fixture_server.py &
 SERVER_PID=$!
@@ -224,7 +241,21 @@ printf 'https://ticket.test/\nOK-CODE\n' |
     script -qec \
         '/bin/sh /src/install.sh' \
         /dev/null >/tmp/online-success.log
-[ -f /tmp/maitix-control-installed ]
+[ -f /tmp/maitix-control-installed-active ]
+grep -q '^status=installed-active' /tmp/online-success.log
+if grep -q 'activate_command=' /tmp/online-success.log; then
+    printf '%s\n' 'active install unexpectedly printed a standby command' >&2
+    exit 1
+fi
+
+printf 'https://ticket.test/\nSTANDBY-CODE\n' |
+    script -qec \
+        '/bin/sh /src/install.sh' \
+        /dev/null >/tmp/online-standby.log
+[ -f /tmp/maitix-control-installed-standby ]
+grep -q '^status=installed-standby' /tmp/online-standby.log
+grep -q '^activate_command=sudo /bin/sh /opt/maitix/current/deployments/control-plane/activate-control-host.sh' \
+    /tmp/online-standby.log
 
 if printf 'https://ticket.test\nOK-CODE\n' |
     script -qec \

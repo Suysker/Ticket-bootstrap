@@ -13,7 +13,11 @@ from pathlib import Path
 ROOT = Path(os.environ["MAITIX_FIXTURE_ROOT"]).resolve()
 GRANTS: dict[str, tuple[str, bytes]] = {}
 COMPLETED_GRANTS: set[str] = set()
-GRANT_BY_CODE = {"OK-CODE": "ok", "TRUNCATED-CODE": "truncated"}
+GRANT_BY_CODE = {
+    "OK-CODE": "ok",
+    "STANDBY-CODE": "standby",
+    "TRUNCATED-CODE": "truncated",
+}
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -60,7 +64,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
             return
         if (
             set(request) != {"protocol", "recipient", "code"}
-            or request["protocol"] != "maitix-control-bootstrap-v3"
+            or request["protocol"] != "maitix-control-bootstrap-v4"
             or request["code"] not in GRANT_BY_CODE
             or not isinstance(request["recipient"], str)
             or not request["recipient"].startswith("age1")
@@ -115,7 +119,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
         self._send(
             HTTPStatus.OK,
             ciphertext,
-            "application/vnd.maitix.control-seed.v3+age",
+            "application/vnd.maitix.control-seed.v4+age",
         )
 
     def _send(self, status: HTTPStatus, body: bytes, content_type: str) -> None:
